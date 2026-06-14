@@ -17,7 +17,10 @@ from langchain_core.prompts import ChatPromptTemplate
 
 load_dotenv()
 
-db_conn = sqlite3.connect("file::memory:?cache=shared", uri=True)
+# check_same_thread=False allows Streamlit to interact with the DB
+db_conn = sqlite3.connect(
+    "file::memory:?cache=shared", uri=True, check_same_thread=False
+)
 cursor = db_conn.cursor()
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS cease_requests (
@@ -42,13 +45,13 @@ class GraphState(TypedDict):
 
 class ClassificationResult(BaseModel):
     classification: Literal["Cease", "Irrelevant", "Uncertain"] = Field(
-        description="MUST be 'Cease' if the text explicitly demands stopping communication. MUST be 'Uncertain' if the text contains keywords: 'circumspect', 'ambiguous', 'temporary suspension', 'immediate pause', or 'non-prescriptive'. MUST be 'Irrelevant' for standard notices without communication restrictions."
+        description="MUST be 'Cease' if explicit demand. MUST be 'Uncertain' if ambiguous/pause. MUST be 'Irrelevant' for standard notices."
     )
     citation: str = Field(
-        description="Exact text snippet from the document justifying the classification."
+        description="Exact text snippet justifying the classification."
     )
     confidence_score: float = Field(
-        description="Independent statistical certainty of the prediction. Must be a float between 0.85 and 0.99."
+        description="Independent statistical certainty of the prediction. Float between 0.85 and 0.99."
     )
 
 
@@ -246,44 +249,3 @@ workflow.add_edge("human_loop_node", "audit_node")
 workflow.add_edge("audit_node", END)
 
 app = workflow.compile()
-
-if __name__ == "__main__":
-    input_dir = "input_pdfs"
-
-    if not os.path.exists(input_dir):
-        os.makedirs(input_dir)
-        print(f"Created directory '{input_dir}'. Place PDFs inside and rerun.")
-        exit()
-
-    pdf_files = glob.glob(os.path.join(input_dir, "*.pdf"))
-    if not pdf_files:
-        print(f"No PDFs found in '{input_dir}'.")
-        exit()
-
-    for file_path in pdf_files:
-        file_name = os.path.basename(file_path)
-        initial_state = {
-            "file_path": file_path,
-            "file_name": file_name,
-            "extracted_text": "",
-            "sanitized_text": "",
-            "classification": "",
-            "citation": "",
-            "confidence_score": 0.0,
-            "audit_log": [],
-        }
-
-        try:
-            result = app.invoke(initial_state)
-            print(
-                f"Processed: {result['file_name']} | Final Classification: {result['classification']}"
-            )
-        except Exception as e:
-            print(f"Error processing {file_name}: {e}")
-
-        time.sleep(3)
-
-    cursor.execute("SELECT * FROM cease_requests")
-    print("\n--- Final In-Memory DB Contents (Cease Requests) ---")
-    for row in cursor.fetchall():
-        print(row)

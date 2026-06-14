@@ -5,3 +5,5 @@ pydantic
 python-dotenv
 pytesseract
 pdf2image
+streamlit
+pandas
