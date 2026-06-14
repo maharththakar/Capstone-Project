@@ -1,0 +1,8 @@
+.DS_Store
+venv/
+__pycache__/
+.env
+input_pdfs/
+archived_irrelevant.csv
+system_audit.log
+*.pdf
